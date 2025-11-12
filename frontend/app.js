@@ -3,6 +3,12 @@ const API_BASE_URL = window.location.hostname === 'localhost'
     ? 'http://localhost:8001'
     : window.location.origin;
 
+// Debug: Log API URL on load
+console.log('ScanLabel AI initialized');
+console.log('API URL:', API_BASE_URL);
+console.log('Hostname:', window.location.hostname);
+console.log('Origin:', window.location.origin);
+
 // DOM Elements
 const barcodeInput = document.getElementById('barcodeInput');
 const scanButton = document.getElementById('scanButton');
@@ -757,20 +763,28 @@ async function scanProduct() {
     
     hideAll();
     showLoading();
-    
+
     try {
-        const response = await fetch(`${API_BASE_URL}/scan?barcode=${encodeURIComponent(barcode)}`);
-        
+        const url = `${API_BASE_URL}/scan?barcode=${encodeURIComponent(barcode)}`;
+        console.log('Fetching:', url);
+
+        const response = await fetch(url);
+        console.log('Response status:', response.status);
+        console.log('Response ok:', response.ok);
+
         if (!response.ok) {
             const errorData = await response.json();
+            console.error('API Error:', errorData);
             throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
+        console.log('API Success:', data);
         displayResult(data);
-        
+
     } catch (error) {
-        showError(error.message || 'Failed to scan product. Please check your connection and try again.');
+        console.error('Scan error:', error);
+        showError(`Error: ${error.message}\n\nAPI: ${API_BASE_URL}\n\nPlease check your connection and try again.`);
     } finally {
         hideLoading();
     }
@@ -903,7 +917,8 @@ function hideLoading() {
 }
 
 function showError(message) {
-    errorMessage.textContent = message;
+    // Preserve line breaks by replacing \n with <br>
+    errorMessage.innerHTML = message.replace(/\n/g, '<br>');
     errorMessage.classList.remove('hidden');
     errorMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
