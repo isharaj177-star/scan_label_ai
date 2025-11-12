@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Scan food barcodes to get instant health analysis using AI">
+    <title>ScanLabel AI</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="32" height="32" rx="6" fill="#000000"/>
+                    <path d="M16 8L20 14H12L16 8Z" fill="white"/>
+                    <path d="M12 14L16 20L20 14H12Z" fill="white"/>
+                    <path d="M16 20L12 26H20L16 20Z" fill="white"/>
+                </svg>
+                <h1>ScanLabel AI</h1>
+            </div>
+            <p class="tagline">Intelligent Food Health Analysis</p>
+            <p class="format-info">EAN-13 • EAN-8 • UPC-A • UPC-E • Code 128 • QR Codes</p>
+        </header>
+
+        <main>
+            <div class="scanner-section">
+                <div class="scan-tabs">
+                    <button class="tab-btn active" data-tab="manual">Barcode</button>
+                    <button class="tab-btn" data-tab="camera">Camera</button>
+                    <button class="tab-btn" data-tab="upload">Upload</button>
+                    <button class="tab-btn" data-tab="food">Food Image</button>
+                </div>
+
+                <div id="manualTab" class="tab-content active">
+                    <div class="input-group">
+                        <input 
+                            type="text" 
+                            id="barcodeInput" 
+                            placeholder="Enter product barcode (8-13 digits)"
+                            maxlength="13"
+                            autocomplete="off"
+                            pattern="[0-9]{8,13}"
+                        >
+                        <button id="scanButton" class="btn-primary">Scan</button>
+                    </div>
+                    <p class="input-hint">Tip: If camera scan is incorrect, manually enter the barcode number below the barcode</p>
+                    
+                    <div class="quick-barcodes">
+                        <p>Sample Products</p>
+                        <div class="quick-buttons">
+                            <button class="quick-btn" data-barcode="5449000000996">Coca-Cola</button>
+                            <button class="quick-btn" data-barcode="3017620422003">Nutella</button>
+                            <button class="quick-btn" data-barcode="3229820129488">Evian</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="cameraTab" class="tab-content">
+                    <div id="cameraContainer" class="camera-container">
+                        <div id="cameraPreview" class="camera-preview"></div>
+                        <div class="camera-controls">
+                            <button id="startCameraBtn" class="btn-primary">Start Camera</button>
+                            <button id="stopCameraBtn" class="btn-secondary hidden">Stop</button>
+                        </div>
+                        <p class="camera-hint">Point camera at barcode or QR code</p>
+                        <div id="scanningIndicator" class="scanning-indicator hidden">
+                            <div class="scanning-dot"></div>
+                            <span>Scanning...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="uploadTab" class="tab-content">
+                    <div class="upload-area" id="uploadArea">
+                        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                        <div class="upload-content">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p>Upload barcode image</p>
+                            <p class="upload-hint">JPG, PNG, WebP</p>
+                        </div>
+                    </div>
+                    <div id="uploadPreview" class="upload-preview hidden"></div>
+                </div>
+
+                <div id="foodTab" class="tab-content">
+                    <div class="food-options">
+                        <button class="btn btn-secondary" id="startFoodCameraBtn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                <circle cx="12" cy="13" r="4"></circle>
+                            </svg>
+                            Take Photo
+                        </button>
+                        <span class="divider">or</span>
+                        <div class="food-upload-area" id="foodUploadArea">
+                            <input type="file" id="foodFileInput" accept="image/*" style="display: none;">
+                            <div class="upload-content">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                <p>Upload Image</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="foodCameraPreview" class="camera-preview hidden">
+                        <video id="foodVideo" autoplay playsinline></video>
+                        <div class="camera-controls">
+                            <button class="btn btn-primary btn-large" id="captureFoodBtn">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                Capture
+                            </button>
+                            <button class="btn btn-secondary" id="stopFoodCameraBtn">Cancel</button>
+                        </div>
+                    </div>
+                    
+                    <div id="foodPreview" class="upload-preview hidden"></div>
+                </div>
+            </div>
+
+            <div id="loadingIndicator" class="loading hidden">
+                <div class="spinner"></div>
+                <p>Analyzing product</p>
+            </div>
+
+            <div id="errorMessage" class="error-message hidden"></div>
+
+            <div id="resultCard" class="result-card hidden">
+                <!-- Product Header -->
+                <div class="product-header">
+                    <div class="product-title-group">
+                        <h2 id="productName" class="product-name">-</h2>
+                        <div class="product-meta">
+                            <span class="meta-item">
+                                <span class="meta-label">Brand</span>
+                                <span id="productBrand" class="meta-value">-</span>
+                            </span>
+                            <span class="meta-divider">•</span>
+                            <span class="meta-item">
+                                <span class="meta-label">Barcode</span>
+                                <span id="productBarcode" class="meta-value">-</span>
+                            </span>
+                        </div>
+                    </div>
+                    <div id="healthBadge" class="health-status">
+                        <span class="health-status-label">-</span>
+                    </div>
+                </div>
+
+                <!-- Health Score -->
+                <div class="health-score-section">
+                    <div class="score-circle">
+                        <svg class="score-ring" viewBox="0 0 120 120">
+                            <circle class="score-bg" cx="60" cy="60" r="54"></circle>
+                            <circle class="score-progress" id="scoreProgress" cx="60" cy="60" r="54"></circle>
+                        </svg>
+                        <div class="score-content">
+                            <span class="score-value" id="nutritionScore">-</span>
+                            <span class="score-label">Health Score</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Health Assessment -->
+                <div class="health-assessment">
+                    <div class="assessment-content">
+                        <p id="healthMessage" class="assessment-text">-</p>
+                    </div>
+                </div>
+
+                <!-- Health Insights -->
+                <div id="healthInsightsSection" class="insights-section hidden">
+                    <div class="section-header">
+                        <h3 class="section-title">Health Insights</h3>
+                    </div>
+                    <div id="healthInsightsList" class="insights-list"></div>
+                </div>
+
+                <!-- Nutrition Facts -->
+                <div class="nutrition-section">
+                    <div class="section-header">
+                        <h3 class="section-title">Nutrition Facts</h3>
+                        <span class="section-subtitle">Per 100g</span>
+                    </div>
+                    <div class="nutrition-grid">
+                        <div class="nutrition-card">
+                            <div class="nutrition-header">
+                                <span class="nutrition-label">Energy</span>
+                                <span class="nutrition-dv" id="energyDV">-</span>
+                            </div>
+                            <div class="nutrition-value-large" id="energy">-</div>
+                            <span class="nutrition-unit">kcal</span>
+                            <div class="nutrition-bar">
+                                <div class="nutrition-bar-fill" id="energyBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="nutrition-card">
+                            <div class="nutrition-header">
+                                <span class="nutrition-label">Protein</span>
+                                <span class="nutrition-dv" id="proteinsDV">-</span>
+                            </div>
+                            <div class="nutrition-value-large" id="proteins">-</div>
+                            <span class="nutrition-unit">g</span>
+                            <div class="nutrition-bar">
+                                <div class="nutrition-bar-fill protein" id="proteinsBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="nutrition-card">
+                            <div class="nutrition-header">
+                                <span class="nutrition-label">Fat</span>
+                                <span class="nutrition-dv" id="fatDV">-</span>
+                            </div>
+                            <div class="nutrition-value-large" id="fat">-</div>
+                            <span class="nutrition-unit">g</span>
+                            <div class="nutrition-bar">
+                                <div class="nutrition-bar-fill fat" id="fatBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="nutrition-card">
+                            <div class="nutrition-header">
+                                <span class="nutrition-label">Sugars</span>
+                                <span class="nutrition-dv" id="sugarsDV">-</span>
+                            </div>
+                            <div class="nutrition-value-large" id="sugars">-</div>
+                            <span class="nutrition-unit">g</span>
+                            <div class="nutrition-bar">
+                                <div class="nutrition-bar-fill sugar" id="sugarsBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="nutrition-card">
+                            <div class="nutrition-header">
+                                <span class="nutrition-label">Fiber</span>
+                                <span class="nutrition-dv" id="fiberDV">-</span>
+                            </div>
+                            <div class="nutrition-value-large" id="fiber">-</div>
+                            <span class="nutrition-unit">g</span>
+                            <div class="nutrition-bar">
+                                <div class="nutrition-bar-fill fiber" id="fiberBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="nutrition-card">
+                            <div class="nutrition-header">
+                                <span class="nutrition-label">Salt</span>
+                                <span class="nutrition-dv" id="saltDV">-</span>
+                            </div>
+                            <div class="nutrition-value-large" id="salt">-</div>
+                            <span class="nutrition-unit">g</span>
+                            <div class="nutrition-bar">
+                                <div class="nutrition-bar-fill salt" id="saltBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Allergens & Additives -->
+                <div id="allergensSection" class="info-section hidden">
+                    <div class="section-header">
+                        <h3 class="section-title">Allergens</h3>
+                    </div>
+                    <div id="allergensList" class="info-tags"></div>
+                </div>
+
+                <div id="additivesSection" class="info-section hidden">
+                    <div class="section-header">
+                        <h3 class="section-title">Additives</h3>
+                    </div>
+                    <div id="additivesList" class="info-tags"></div>
+                </div>
+
+                <div id="sugarSection" class="info-section hidden">
+                    <div class="section-header">
+                        <h3 class="section-title">Sugar Indicators</h3>
+                    </div>
+                    <div id="sugarList" class="info-tags"></div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Powered by Open Food Facts API & Machine Learning</p>
+            <p class="api-link">
+                <a href="http://localhost:8000/docs" target="_blank">API Documentation</a>
+            </p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

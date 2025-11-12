@@ -1,0 +1,19 @@
+runtime: python311
+
+service: default
+
+env_variables:
+  LOG_LEVEL: INFO
+  PORT: 8000
+
+automatic_scaling:
+  min_instances: 0
+  max_instances: 1
+
+
+
+
+
+
+
+

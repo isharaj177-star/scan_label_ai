@@ -1,0 +1,24 @@
+steps:
+  - name: 'python:3.11'
+    entrypoint: pip
+    args: ['install', '-r', 'requirements.txt']
+  
+  - name: 'python:3.11'
+    entrypoint: python
+    args: ['train_model.py']
+  
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'app'
+      - 'deploy'
+      - 'app.yaml'
+
+timeout: '1200s'
+
+
+
+
+
+
+
+
