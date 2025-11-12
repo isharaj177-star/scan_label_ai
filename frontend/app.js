@@ -37,10 +37,19 @@ let stream = null;
 let scanning = false;
 let lastScannedCode = null;
 let scanConfidence = 0;
-let quaggaInitialized = false;
 let scanAttempts = 0;
 const MAX_SCAN_ATTEMPTS = 10;
-let detectionQuality = 'fast'; // Start fast, increase quality if needed
+
+// Initialize ZXing (modern, accurate barcode reader)
+let codeReader = null;
+try {
+    if (typeof ZXing !== 'undefined') {
+        codeReader = new ZXing.BrowserMultiFormatReader();
+        console.log('ZXing initialized successfully');
+    }
+} catch (error) {
+    console.error('ZXing initialization failed:', error);
+}
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -155,60 +164,76 @@ function switchTab(tabName) {
 // Start camera
 async function startCamera() {
     try {
-        // Request higher quality camera
-        stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: 'environment',
-                width: { ideal: 1920, min: 1280 },
-                height: { ideal: 1080, min: 720 },
-                focusMode: 'continuous',
-                exposureMode: 'continuous',
-                aspectRatio: { ideal: 16/9 }
-            }
-        });
+        if (!codeReader) {
+            showError('Barcode scanner not initialized. Please refresh the page.');
+            return;
+        }
 
+        // Create video element for ZXing
         const video = document.createElement('video');
-        video.srcObject = stream;
+        video.id = 'barcode-video';
+        video.style.width = '100%';
+        video.style.height = 'auto';
         video.setAttribute('autoplay', '');
         video.setAttribute('playsinline', '');
-        video.setAttribute('muted', '');
+
+        // Create scanning animation overlay
+        const scannerOverlay = document.createElement('div');
+        scannerOverlay.className = 'scanner-overlay';
+        scannerOverlay.innerHTML = `
+            <div class="scanner-frame">
+                <div class="scanner-corner top-left"></div>
+                <div class="scanner-corner top-right"></div>
+                <div class="scanner-corner bottom-left"></div>
+                <div class="scanner-corner bottom-right"></div>
+                <div class="scanner-line"></div>
+            </div>
+            <p class="scanner-hint">Align barcode within frame</p>
+        `;
+
         cameraPreview.innerHTML = '';
         cameraPreview.appendChild(video);
+        cameraPreview.appendChild(scannerOverlay);
 
         startCameraBtn.classList.add('hidden');
         stopCameraBtn.classList.remove('hidden');
-
-        // Wait for video to be ready
-        video.addEventListener('loadedmetadata', () => {
-            // Initialize Quagga for live scanning
-            initializeQuagga();
-        });
 
         // Start scanning
         scanning = true;
         lastScannedCode = null;
         scanConfidence = 0;
         scanAttempts = 0;
-        
+
         // Show scanning indicator
         const indicator = document.getElementById('scanningIndicator');
         if (indicator) {
             indicator.classList.remove('hidden');
         }
+
+        // Use ZXing to decode from camera
+        console.log('Starting ZXing camera scanner...');
+        codeReader.decodeFromVideoDevice(undefined, 'barcode-video', (result, err) => {
+            if (result) {
+                console.log('ZXing scan result:', result);
+                const code = result.text.replace(/\D/g, '').trim();
+                if (code && /^\d{8,13}$/.test(code)) {
+                    console.log('Valid barcode detected:', code, 'Format:', result.format);
+                    handleBarcodeDetected(code, { code, format: result.format });
+                }
+            }
+            if (err && !(err instanceof ZXing.NotFoundException)) {
+                console.error('ZXing error:', err);
+            }
+        });
+
+        console.log('Camera started with ZXing scanner');
     } catch (error) {
         showError('Camera access denied. Please allow camera access and try again.');
         console.error('Camera error:', error);
     }
 }
 
-// Initialize Quagga for better barcode detection
-function initializeQuagga() {
-    if (quaggaInitialized) return;
-    
-    // Use manual scanning approach with improved Quagga settings
-    // This is more reliable than LiveStream mode
-    scanBarcodeFromCamera();
-}
+// ZXing scanner handles everything automatically via decodeFromVideoDevice
 
 // Validate EAN-13 checksum (professional-grade validation)
 function validateEAN13Checksum(code) {
@@ -350,17 +375,16 @@ function stopCamera() {
     lastScannedCode = null;
     scanConfidence = 0;
     scanAttempts = 0;
-    
-    // Stop Quagga if initialized
-    if (quaggaInitialized) {
+
+    // Reset ZXing
+    if (codeReader) {
         try {
-            Quagga.stop();
-            quaggaInitialized = false;
+            codeReader.reset();
         } catch (e) {
-            console.log('Error stopping Quagga:', e);
+            console.log('Error resetting ZXing:', e);
         }
     }
-    
+
     if (stream) {
         stream.getTracks().forEach(track => track.stop());
         stream = null;
@@ -368,7 +392,7 @@ function stopCamera() {
     cameraPreview.innerHTML = '';
     startCameraBtn.classList.remove('hidden');
     stopCameraBtn.classList.add('hidden');
-    
+
     // Hide scanning indicator
     const indicator = document.getElementById('scanningIndicator');
     if (indicator) {
@@ -445,114 +469,7 @@ function captureFoodPhoto() {
     }, 'image/jpeg', 0.9);
 }
 
-// Optimized professional-grade scanning
-function scanBarcodeFromCamera() {
-    if (!scanning) return;
-
-    const video = cameraPreview.querySelector('video');
-    if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
-        requestAnimationFrame(() => scanBarcodeFromCamera());
-        return;
-    }
-
-    scanAttempts++;
-
-    // Adaptive quality: Start fast, increase quality if struggling
-    if (scanAttempts % 15 === 0) {
-        detectionQuality = 'high'; // Switch to high quality every 15 attempts
-    } else if (scanAttempts % 5 === 0) {
-        detectionQuality = 'medium';
-    } else {
-        detectionQuality = 'fast';
-    }
-
-    const canvas = document.createElement('canvas');
-    // Adaptive resolution based on quality mode
-    const scale = detectionQuality === 'high' ? 2.5 : detectionQuality === 'medium' ? 2.0 : 1.5;
-    canvas.width = video.videoWidth * scale;
-    canvas.height = video.videoHeight * scale;
-    const ctx = canvas.getContext('2d');
-
-    // Adaptive quality settings
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = detectionQuality === 'high' ? 'high' : 'medium';
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    // Apply enhancement only when needed (saves processing time)
-    if (detectionQuality !== 'fast') {
-        enhanceImageHighContrast(canvas);
-    }
-
-    // Try QR code first (fastest)
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
-    
-    if (qrCode && qrCode.data) {
-        const code = qrCode.data.trim();
-        if (/^\d{8,13}$/.test(code)) {
-            handleBarcodeDetected(code, { code });
-            return;
-        }
-    }
-
-    // Try Quagga with adaptive settings based on quality mode
-    try {
-        const config = {
-            fast: { patchSize: 'medium', workers: 2, halfSample: true, format: 'jpeg', quality: 0.75 },
-            medium: { patchSize: 'medium', workers: 3, halfSample: false, format: 'jpeg', quality: 0.85 },
-            high: { patchSize: 'large', workers: 4, halfSample: false, format: 'png', quality: 1 }
-        };
-
-        const settings = config[detectionQuality];
-
-        Quagga.decodeSingle({
-            decoder: {
-                readers: [
-                    'ean_reader',       // EAN-13 (13 digits) - prioritize
-                    'ean_8_reader',     // EAN-8 (8 digits)
-                    'upc_reader',       // UPC-A (12 digits)
-                    'upc_e_reader'      // UPC-E (8 digits)
-                ],
-                multiple: false
-            },
-            locate: true,
-            src: settings.format === 'png'
-                ? canvas.toDataURL('image/png')
-                : canvas.toDataURL('image/jpeg', settings.quality),
-            numOfWorkers: settings.workers,
-            patchSize: settings.patchSize,
-            halfSample: settings.halfSample
-        }, (result) => {
-            if (result && result.codeResult) {
-                let code = result.codeResult.code;
-
-                // Clean and extract code
-                if (typeof code === 'string') {
-                    code = code.replace(/\D/g, '').trim();
-                } else if (code && code.toString) {
-                    code = code.toString().replace(/\D/g, '').trim();
-                }
-
-                // Validate and handle
-                if (code && /^\d{8,13}$/.test(code)) {
-                    console.log('Detected:', code, 'Quality:', detectionQuality, 'Format:', result.codeResult.format);
-                    handleBarcodeDetected(code, result.codeResult);
-                    detectionQuality = 'fast'; // Reset to fast after successful detection
-                }
-            }
-
-            // Fast, responsive scanning
-            if (scanning) {
-                setTimeout(() => scanBarcodeFromCamera(), 100); // Very fast cycle
-            }
-        });
-    } catch (error) {
-        console.error('Scan error:', error);
-        if (scanning) {
-            setTimeout(() => scanBarcodeFromCamera(), 100);
-        }
-    }
-}
+// ZXing continuous scanning is now handled by decodeFromVideoDevice callback in startCamera()
 
 // Professional image enhancement strategies
 function enhanceImageStandard(canvas) {
@@ -864,12 +781,80 @@ function displayResult(data) {
     document.getElementById('saltDV').textContent = `${dailyValues.salt?.toFixed(0) || 0}% DV`;
     document.getElementById('saltBar').style.width = `${Math.min(100, dailyValues.salt || 0)}%`;
     
-    // Health Insights
+    // Health Insights - Enhanced with categories
     const insightsSection = document.getElementById('healthInsightsSection');
     const insightsList = document.getElementById('healthInsightsList');
     if (data.health_insights && data.health_insights.length > 0) {
+        // Categorize insights
+        const categorized = {
+            warning: data.health_insights.filter(i => i.type === 'warning'),
+            caution: data.health_insights.filter(i => i.type === 'caution'),
+            positive: data.health_insights.filter(i => i.type === 'positive'),
+            info: data.health_insights.filter(i => i.type === 'info')
+        };
+
+        // Get category labels
+        const getCategory = (type) => {
+            const labels = {
+                warning: 'Health Concern',
+                caution: 'Moderate',
+                positive: 'Benefit',
+                info: 'Information'
+            };
+            return labels[type] || 'Info';
+        };
+
+        // Update insights count
+        const countEl = document.getElementById('insightsCount');
+        if (countEl) {
+            const warnings = categorized.warning.length;
+            const cautions = categorized.caution.length;
+            const positives = categorized.positive.length;
+
+            const parts = [];
+            if (warnings > 0) parts.push(`${warnings} critical`);
+            if (cautions > 0) parts.push(`${cautions} moderate`);
+            if (positives > 0) parts.push(`${positives} positive`);
+
+            countEl.textContent = parts.join(' • ') || `${data.health_insights.length} findings`;
+        }
+
+        // Severity level mappings
+        const getSeverityData = (type) => {
+            const severityMap = {
+                warning: { badge: 'HIGH', label: 'Critical', level: 3 },
+                caution: { badge: 'MED', label: 'Moderate', level: 2 },
+                positive: { badge: 'LOW', label: 'Positive', level: 1 },
+                info: { badge: 'INFO', label: 'Notice', level: 0 }
+            };
+            return severityMap[type] || severityMap.info;
+        };
+
+        // Extract metric from insight text if present
+        const extractMetric = (text) => {
+            // Look for patterns like "99.0g", "15%", etc.
+            const match = text.match(/(\d+\.?\d*\s*g|\d+%|very high|high|moderate|low|very low)/i);
+            return match ? match[0] : null;
+        };
+
         insightsList.innerHTML = data.health_insights
-            .map(insight => `<div class="insight-item ${insight.type}">${insight.text}</div>`)
+            .map(insight => {
+                const severity = getSeverityData(insight.type);
+                const metric = extractMetric(insight.text);
+
+                return `
+                    <div class="insight-item ${insight.type}">
+                        <div class="insight-severity">
+                            <div class="severity-badge">${severity.badge}</div>
+                            <div class="severity-label">${severity.label}</div>
+                        </div>
+                        <div class="insight-content">
+                            <div class="insight-text">${insight.text}</div>
+                            ${metric ? `<div class="insight-metric">Detected value: ${metric}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            })
             .join('');
         insightsSection.classList.remove('hidden');
     } else {
