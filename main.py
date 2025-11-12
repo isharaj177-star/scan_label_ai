@@ -3,8 +3,9 @@ FastAPI backend for ScanLabel AI - Food health analysis system.
 """
 
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from typing import Optional
 import os
 
@@ -150,6 +151,11 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
 
+# Mount static files for frontend
+frontend_dir = os.path.join(os.path.dirname(__file__), "frontend")
+if os.path.exists(frontend_dir):
+    app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
+
 # Load model at startup
 model = None
 
@@ -174,9 +180,9 @@ async def startup_event():
         model = None
 
 
-@app.get("/")
-async def root():
-    """Root endpoint with API information."""
+@app.get("/api")
+async def api_info():
+    """API information endpoint."""
     return {
         "name": "ScanLabel AI",
         "description": "Food health analysis API",
@@ -185,6 +191,25 @@ async def root():
             "/docs": "API documentation"
         }
     }
+
+
+@app.get("/")
+async def serve_frontend():
+    """Serve the frontend HTML."""
+    frontend_path = os.path.join(os.path.dirname(__file__), "frontend", "index.html")
+    if os.path.exists(frontend_path):
+        return FileResponse(frontend_path)
+    else:
+        # Fallback to API info if frontend not found
+        return {
+            "name": "ScanLabel AI",
+            "description": "Food health analysis API",
+            "endpoints": {
+                "/scan": "Scan a product by barcode",
+                "/docs": "API documentation",
+                "/api": "API information"
+            }
+        }
 
 
 @app.get("/scan")
