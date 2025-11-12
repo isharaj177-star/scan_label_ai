@@ -1,5 +1,7 @@
-// API Configuration
-const API_BASE_URL = 'http://localhost:8001';
+// API Configuration - automatically use deployed URL or localhost
+const API_BASE_URL = window.location.hostname === 'localhost'
+    ? 'http://localhost:8001'
+    : window.location.origin;
 
 // DOM Elements
 const barcodeInput = document.getElementById('barcodeInput');
@@ -153,7 +155,8 @@ async function startCamera() {
                 width: { ideal: 1920, min: 1280 },
                 height: { ideal: 1080, min: 720 },
                 focusMode: 'continuous',
-                exposureMode: 'continuous'
+                exposureMode: 'continuous',
+                aspectRatio: { ideal: 16/9 }
             }
         });
 
@@ -451,21 +454,19 @@ function scanBarcodeFromCamera() {
     }
 
     const canvas = document.createElement('canvas');
-    // Optimized resolution - balance between quality and speed
-    const scale = 1.5; // Reduced from 2.5 for better performance
+    // Higher resolution for better barcode detection
+    const scale = 2.5; // Increased for clarity
     canvas.width = video.videoWidth * scale;
     canvas.height = video.videoHeight * scale;
     const ctx = canvas.getContext('2d');
-    
-    // Fast image capture
+
+    // High quality image capture
     ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'medium'; // Changed from 'high' for speed
+    ctx.imageSmoothingQuality = 'high'; // High quality for clarity
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // Use faster image processing - only apply enhancement every 3rd frame
-    if (scanAttempts % 3 === 0) {
-        enhanceImageHighContrast(canvas);
-    }
+
+    // Apply enhancement every frame for consistent quality
+    enhanceImageHighContrast(canvas);
 
     // Try QR code first (fastest)
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -479,19 +480,21 @@ function scanBarcodeFromCamera() {
         }
     }
 
-    // Try Quagga with optimized settings
+    // Try Quagga with high-accuracy settings
     try {
-        // Use medium patch size for balance of speed and accuracy
-        const patchSize = 'medium';
-        
+        // Use large patch size for better accuracy
+        const patchSize = 'large';
+
         Quagga.decodeSingle({
             decoder: {
                 readers: [
-                    'ean_reader',      // EAN-13 (13 digits) - prioritize this
+                    'ean_reader',       // EAN-13 (13 digits) - most common
                     'ean_8_reader',     // EAN-8 (8 digits)
-                    'upc_reader',      // UPC-A (12 digits)
-                    'upc_e_reader'     // UPC-E (8 digits)
+                    'upc_reader',       // UPC-A (12 digits)
+                    'upc_e_reader',     // UPC-E (8 digits)
+                    'code_128_reader'   // Code 128 - added for more formats
                 ],
+                multiple: false,
                 debug: {
                     drawBoundingBox: false,
                     showFrequency: false,
@@ -500,10 +503,10 @@ function scanBarcodeFromCamera() {
                 }
             },
             locate: true,
-            src: canvas.toDataURL('image/jpeg', 0.85), // Use JPEG with compression for speed
-            numOfWorkers: 2, // Reduced from 4 for better performance
+            src: canvas.toDataURL('image/png'), // Use PNG for maximum quality
+            numOfWorkers: 4, // More workers for better detection
             patchSize: patchSize,
-            halfSample: true // Always use half sample for speed
+            halfSample: false // Disable half sample for full resolution
         }, (result) => {
             if (result && result.codeResult) {
                 let code = result.codeResult.code;
@@ -522,15 +525,15 @@ function scanBarcodeFromCamera() {
                 }
             }
             
-            // Continue scanning with optimized delay
+            // Continue scanning with faster delay for responsive scanning
             if (scanning) {
-                setTimeout(() => scanBarcodeFromCamera(), 250); // Balanced delay
+                setTimeout(() => scanBarcodeFromCamera(), 150); // Faster scanning
             }
         });
     } catch (error) {
         console.error('Scan error:', error);
         if (scanning) {
-            setTimeout(() => scanBarcodeFromCamera(), 250);
+            setTimeout(() => scanBarcodeFromCamera(), 150);
         }
     }
 }
