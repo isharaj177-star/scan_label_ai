@@ -39,7 +39,8 @@ let lastScannedCode = null;
 let scanConfidence = 0;
 let quaggaInitialized = false;
 let scanAttempts = 0;
-const MAX_SCAN_ATTEMPTS = 5;
+const MAX_SCAN_ATTEMPTS = 10;
+let detectionQuality = 'fast'; // Start fast, increase quality if needed
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -288,9 +289,9 @@ function handleBarcodeDetected(code, codeResult) {
         return;
     }
     
-    // Prefer validated 13-digit EAN-13 codes (most common for products)
-    // Require higher confidence for shorter codes (might be partial scans)
-    const requiredConfidence = code.length === 13 ? 2 : code.length === 8 ? 3 : 4;
+    // Lower confidence requirements for faster detection
+    // Most barcodes are validated by checksum anyway
+    const requiredConfidence = code.length === 13 ? 1 : code.length === 12 ? 1 : 2;
     
     // Check if same code detected multiple times (confidence check)
     if (lastScannedCode === code) {
@@ -455,24 +456,32 @@ function scanBarcodeFromCamera() {
     }
 
     scanAttempts++;
-    if (scanAttempts > MAX_SCAN_ATTEMPTS) {
-        scanAttempts = 0;
+
+    // Adaptive quality: Start fast, increase quality if struggling
+    if (scanAttempts % 15 === 0) {
+        detectionQuality = 'high'; // Switch to high quality every 15 attempts
+    } else if (scanAttempts % 5 === 0) {
+        detectionQuality = 'medium';
+    } else {
+        detectionQuality = 'fast';
     }
 
     const canvas = document.createElement('canvas');
-    // Higher resolution for better barcode detection
-    const scale = 2.5; // Increased for clarity
+    // Adaptive resolution based on quality mode
+    const scale = detectionQuality === 'high' ? 2.5 : detectionQuality === 'medium' ? 2.0 : 1.5;
     canvas.width = video.videoWidth * scale;
     canvas.height = video.videoHeight * scale;
     const ctx = canvas.getContext('2d');
 
-    // High quality image capture
+    // Adaptive quality settings
     ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high'; // High quality for clarity
+    ctx.imageSmoothingQuality = detectionQuality === 'high' ? 'high' : 'medium';
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Apply enhancement every frame for consistent quality
-    enhanceImageHighContrast(canvas);
+    // Apply enhancement only when needed (saves processing time)
+    if (detectionQuality !== 'fast') {
+        enhanceImageHighContrast(canvas);
+    }
 
     // Try QR code first (fastest)
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -486,60 +495,61 @@ function scanBarcodeFromCamera() {
         }
     }
 
-    // Try Quagga with high-accuracy settings
+    // Try Quagga with adaptive settings based on quality mode
     try {
-        // Use large patch size for better accuracy
-        const patchSize = 'large';
+        const config = {
+            fast: { patchSize: 'medium', workers: 2, halfSample: true, format: 'jpeg', quality: 0.75 },
+            medium: { patchSize: 'medium', workers: 3, halfSample: false, format: 'jpeg', quality: 0.85 },
+            high: { patchSize: 'large', workers: 4, halfSample: false, format: 'png', quality: 1 }
+        };
+
+        const settings = config[detectionQuality];
 
         Quagga.decodeSingle({
             decoder: {
                 readers: [
-                    'ean_reader',       // EAN-13 (13 digits) - most common
+                    'ean_reader',       // EAN-13 (13 digits) - prioritize
                     'ean_8_reader',     // EAN-8 (8 digits)
                     'upc_reader',       // UPC-A (12 digits)
-                    'upc_e_reader',     // UPC-E (8 digits)
-                    'code_128_reader'   // Code 128 - added for more formats
+                    'upc_e_reader'      // UPC-E (8 digits)
                 ],
-                multiple: false,
-                debug: {
-                    drawBoundingBox: false,
-                    showFrequency: false,
-                    drawScanline: false,
-                    showPattern: false
-                }
+                multiple: false
             },
             locate: true,
-            src: canvas.toDataURL('image/png'), // Use PNG for maximum quality
-            numOfWorkers: 4, // More workers for better detection
-            patchSize: patchSize,
-            halfSample: false // Disable half sample for full resolution
+            src: settings.format === 'png'
+                ? canvas.toDataURL('image/png')
+                : canvas.toDataURL('image/jpeg', settings.quality),
+            numOfWorkers: settings.workers,
+            patchSize: settings.patchSize,
+            halfSample: settings.halfSample
         }, (result) => {
             if (result && result.codeResult) {
                 let code = result.codeResult.code;
-                
-                // Extract code properly - handle different formats
+
+                // Clean and extract code
                 if (typeof code === 'string') {
                     code = code.replace(/\D/g, '').trim();
                 } else if (code && code.toString) {
                     code = code.toString().replace(/\D/g, '').trim();
                 }
-                
+
                 // Validate and handle
                 if (code && /^\d{8,13}$/.test(code)) {
-                    console.log('Quagga detected:', code, 'Format:', result.codeResult.format);
+                    console.log('Detected:', code, 'Quality:', detectionQuality, 'Format:', result.codeResult.format);
                     handleBarcodeDetected(code, result.codeResult);
+                    detectionQuality = 'fast'; // Reset to fast after successful detection
                 }
             }
-            
-            // Continue scanning with faster delay for responsive scanning
+
+            // Fast, responsive scanning
             if (scanning) {
-                setTimeout(() => scanBarcodeFromCamera(), 150); // Faster scanning
+                setTimeout(() => scanBarcodeFromCamera(), 100); // Very fast cycle
             }
         });
     } catch (error) {
         console.error('Scan error:', error);
         if (scanning) {
-            setTimeout(() => scanBarcodeFromCamera(), 150);
+            setTimeout(() => scanBarcodeFromCamera(), 100);
         }
     }
 }
