@@ -722,6 +722,12 @@ function displayResult(data) {
     // Store product data for alternatives feature
     currentProductData = data;
 
+    // Hide old alternatives when displaying new product
+    const alternativesResults = document.getElementById('alternativesResults');
+    if (alternativesResults) {
+        alternativesResults.classList.add('hidden');
+    }
+
     document.getElementById('productName').textContent = data.product_name || 'Unknown Product';
     document.getElementById('productBrand').textContent = data.brand || 'Unknown';
     document.getElementById('productBarcode').textContent = data.barcode || (data.source === 'image_recognition' ? 'N/A (Food Image)' : '-');
@@ -961,12 +967,17 @@ async function getHealthierAlternatives() {
     `;
 
     try {
+        console.log('Requesting alternatives for:', currentProductData.product_name);
+
         const response = await fetch(`${API_BASE_URL}/recommend-alternatives`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache'
             },
-            body: JSON.stringify(currentProductData)
+            body: JSON.stringify(currentProductData),
+            cache: 'no-store'
         });
 
         if (!response.ok) {
@@ -975,6 +986,7 @@ async function getHealthierAlternatives() {
         }
 
         const data = await response.json();
+        console.log('Received alternatives:', data.source, '- Count:', data.alternatives?.length);
         displayAlternatives(data);
 
         // Scroll to alternatives
