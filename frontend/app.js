@@ -1005,7 +1005,7 @@ function displayAlternatives(data) {
     const alternativesTipsList = document.getElementById('alternativesTipsList');
 
     // Show source
-    const sourceText = data.source === 'ai_powered' ? 'AI-Powered Recommendations' : 'Smart Recommendations';
+    const sourceText = data.source === 'ai_powered' ? 'Personalized Recommendations' : 'Smart Recommendations';
     alternativesSource.textContent = sourceText;
 
     // Show summary

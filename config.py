@@ -41,9 +41,7 @@ class Settings(BaseSettings):
     GOOGLE_VISION_API_KEY: Optional[str] = Field(default=None)
     GOOGLE_VISION_API_ENABLED: bool = Field(default=True)
 
-    # OpenRouter API Settings (for AI-powered healthier alternatives)
-    # Free models available: Gemini 2.0 Flash, Llama 3.3 70B, etc.
-    # Get API key: https://openrouter.ai/keys
+    # OpenRouter API Settings
     OPENROUTER_API_KEY: Optional[str] = Field(default=None)
     OPENROUTER_API_BASE_URL: str = Field(default="https://openrouter.ai/api/v1")
     OPENROUTER_MODEL: str = Field(default="google/gemini-2.0-flash-exp:free")

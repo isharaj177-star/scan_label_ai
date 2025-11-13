@@ -19,13 +19,11 @@ from utils.food_recognition import get_food_info_from_image, get_fallback_nutrit
 from utils.openrouter_client import get_alternative_with_fallback
 from models.schemas import ScanResponse
 
-# Helper function to safely print unicode on Windows
 def safe_print(text, **kwargs):
-    """Safely print text with unicode characters on Windows."""
+    """Print text handling unicode encoding errors."""
     try:
         print(text, **kwargs)
     except UnicodeEncodeError:
-        # Replace problematic characters with ASCII equivalents
         safe_text = text.encode('ascii', errors='replace').decode('ascii')
         print(safe_text, **kwargs)
 

@@ -1,7 +1,4 @@
-"""
-OpenRouter API client for AI-powered healthier food alternatives.
-Uses Gemini 2.0 Flash Experimental (free) for nutrition recommendations.
-"""
+"""OpenRouter API client for healthier food alternatives."""
 
 import requests
 import json
@@ -58,7 +55,7 @@ def generate_healthier_alternatives(
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are a nutrition expert AI that recommends healthier food alternatives. Provide practical, achievable suggestions with clear reasoning based on nutritional data."
+                    "content": "Provide healthier food alternatives with practical suggestions based on nutritional data."
                 },
                 {
                     "role": "user",
