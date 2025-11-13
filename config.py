@@ -40,7 +40,15 @@ class Settings(BaseSettings):
     # Setup: https://cloud.google.com/vision/docs/setup
     GOOGLE_VISION_API_KEY: Optional[str] = Field(default=None)
     GOOGLE_VISION_API_ENABLED: bool = Field(default=True)
-    
+
+    # OpenRouter API Settings (for AI-powered healthier alternatives)
+    # Free models available: Gemini 2.0 Flash, Llama 3.3 70B, etc.
+    # Get API key: https://openrouter.ai/keys
+    OPENROUTER_API_KEY: Optional[str] = Field(default=None)
+    OPENROUTER_API_BASE_URL: str = Field(default="https://openrouter.ai/api/v1")
+    OPENROUTER_MODEL: str = Field(default="google/gemini-2.0-flash-exp:free")
+    OPENROUTER_TIMEOUT: int = Field(default=30)
+
     # Logging Settings
     LOG_LEVEL: str = Field(default="INFO")
     LOG_FORMAT: str = Field(default="%(asctime)s - %(name)s - %(levelname)s - %(message)s")

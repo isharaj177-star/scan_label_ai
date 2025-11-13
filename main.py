@@ -16,7 +16,18 @@ from utils.preprocess import preprocess_api_data
 from utils.predict import load_model, predict_health
 from utils.allergen_detector import analyze_ingredients
 from utils.food_recognition import get_food_info_from_image, get_fallback_nutrition
+from utils.openrouter_client import get_alternative_with_fallback
 from models.schemas import ScanResponse
+
+# Helper function to safely print unicode on Windows
+def safe_print(text, **kwargs):
+    """Safely print text with unicode characters on Windows."""
+    try:
+        print(text, **kwargs)
+    except UnicodeEncodeError:
+        # Replace problematic characters with ASCII equivalents
+        safe_text = text.encode('ascii', errors='replace').decode('ascii')
+        print(safe_text, **kwargs)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -185,9 +196,12 @@ async def api_info():
     """API information endpoint."""
     return {
         "name": "ScanLabel AI",
-        "description": "Food health analysis API",
+        "description": "Food health analysis API with AI-powered recommendations",
         "endpoints": {
             "/scan": "Scan a product by barcode",
+            "/scan-image": "Scan food from image",
+            "/recommend-alternatives": "Get AI-powered healthier alternatives",
+            "/health": "API health check",
             "/docs": "API documentation"
         }
     }
@@ -265,7 +279,7 @@ async def scan_product(
                 detail="Failed to extract product information"
             )
         
-        print(f"Product info extracted: {product_info.get('product_name', 'Unknown')}", flush=True)
+        safe_print(f"Product info extracted: {product_info.get('product_name', 'Unknown')}", flush=True)
 
         # Preprocess nutrition data for model
         print("Preprocessing nutrition data...", flush=True)
@@ -388,7 +402,7 @@ async def scan_product(
         response_dict['daily_values'] = nutrition_score_data['daily_values']
         response_dict['health_insights'] = health_insights
         
-        print(f"\nSUCCESS! Product analyzed: {product_info.get('product_name', 'Unknown')}", flush=True)
+        safe_print(f"\nSUCCESS! Product analyzed: {product_info.get('product_name', 'Unknown')}", flush=True)
         print(f"   Health: {health_prediction}", flush=True)
         print(f"   Score: {nutrition_score_data['score']}/100", flush=True)
         print("=" * 60 + "\n", flush=True)
@@ -544,6 +558,93 @@ def generate_health_message(
     return " ".join(messages)
 
 
+@app.post("/recommend-alternatives")
+async def recommend_alternatives(request: Request):
+    """
+    Recommend healthier food alternatives for a scanned product.
+    Uses AI (OpenRouter) to generate personalized, healthier options.
+
+    Request body should contain product and nutrition data from a scan.
+
+    Returns:
+        JSON response with 3-5 healthier alternative recommendations
+    """
+    try:
+        # Parse request body
+        body = await request.json()
+
+        # Extract required data
+        product_name = body.get('product_name', 'Unknown Product')
+        brand = body.get('brand', 'Unknown Brand')
+        health_prediction = body.get('health_prediction', 'Moderate')
+
+        # Extract nutrition data
+        nutrients = body.get('nutrients', {})
+        nutrition_data = {
+            'energy_100g': nutrients.get('energy_100g', 0),
+            'sugars_100g': nutrients.get('sugars_100g', 0),
+            'fat_100g': nutrients.get('fat_100g', 0),
+            'salt_100g': nutrients.get('salt_100g', 0),
+            'fiber_100g': nutrients.get('fiber_100g', 0),
+            'proteins_100g': nutrients.get('proteins_100g', 0)
+        }
+
+        # Collect detected issues
+        detected_issues = []
+        detected_issues.extend(body.get('detected_allergens', []))
+        detected_issues.extend(body.get('detected_additives', []))
+        detected_issues.extend(body.get('detected_sugar_indicators', []))
+
+        logger.info(f"Generating alternatives for: {product_name} ({brand})")
+        print(f"\n{'='*60}", flush=True)
+        print(f"RECOMMEND ALTERNATIVES ENDPOINT CALLED", flush=True)
+        safe_print(f"Product: {product_name}", flush=True)
+        print(f"Health Level: {health_prediction}", flush=True)
+        print(f"{'='*60}\n", flush=True)
+
+        # Generate alternatives using AI (with fallback)
+        alternatives_result = get_alternative_with_fallback(
+            product_name=product_name,
+            brand=brand,
+            nutrition_data=nutrition_data,
+            health_prediction=health_prediction,
+            detected_issues=detected_issues
+        )
+
+        if not alternatives_result:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to generate healthier alternatives. Please try again."
+            )
+
+        # Add metadata
+        alternatives_result['product_name'] = product_name
+        alternatives_result['product_brand'] = brand
+        alternatives_result['product_health_level'] = health_prediction
+
+        print(f"SUCCESS! Generated {len(alternatives_result.get('alternatives', []))} alternatives", flush=True)
+        print(f"Source: {alternatives_result.get('source', 'unknown')}", flush=True)
+        print(f"{'='*60}\n", flush=True)
+
+        logger.info(f"Successfully generated {len(alternatives_result.get('alternatives', []))} alternatives")
+
+        return alternatives_result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(f"Error generating alternatives: {e}")
+        logger.error(f"Traceback: {error_trace}")
+        print(f"\nERROR in recommend_alternatives: {e}", flush=True)
+        print(f"Traceback:\n{error_trace}", flush=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating alternatives: {str(e)}"
+        )
+
+
 @app.options("/scan-image")
 async def scan_food_image_options(request: Request):
     """Handle CORS preflight for /scan-image"""
@@ -612,7 +713,7 @@ async def scan_food_image(file: UploadFile = File(...)):
         food_info = get_food_info_from_image(image_data)
 
         if food_info:
-            print(f"Food recognized: {food_info.get('food_name', 'Unknown')}", flush=True)
+            safe_print(f"Food recognized: {food_info.get('food_name', 'Unknown')}", flush=True)
         else:
             print(f"Food recognition failed!", flush=True)
         print(f"   Result: {'SUCCESS' if food_info else 'FAILED'}", flush=True)
@@ -710,7 +811,7 @@ async def scan_food_image(file: UploadFile = File(...)):
             'source': 'image_recognition'
         }
         
-        print(f"\nSUCCESS! Food analyzed: {food_name}", flush=True)
+        safe_print(f"\nSUCCESS! Food analyzed: {food_name}", flush=True)
         print(f"   Health: {health_prediction}", flush=True)
         print(f"   Score: {nutrition_score_data['score']}/100", flush=True)
         print("=" * 60 + "\n", flush=True)

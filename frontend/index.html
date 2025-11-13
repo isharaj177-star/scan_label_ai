@@ -8,6 +8,10 @@
     <link rel="stylesheet" href="/static/styles.css">
     <!-- ZXing - Modern, fast, accurate barcode scanner -->
     <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <!-- jsQR - QR code reader -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <!-- QuaggaJS - Barcode scanner -->
+    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -177,6 +181,31 @@
                 <div class="health-assessment">
                     <div class="assessment-content">
                         <p id="healthMessage" class="assessment-text">-</p>
+                    </div>
+                </div>
+
+                <!-- Alternatives Button -->
+                <div class="alternatives-section">
+                    <button id="getAlternativesBtn" class="btn-alternatives">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                        Get Healthier Alternatives
+                    </button>
+                </div>
+
+                <!-- Alternatives Results -->
+                <div id="alternativesResults" class="alternatives-results hidden">
+                    <div class="section-header">
+                        <h3 class="section-title">Healthier Alternatives</h3>
+                        <span id="alternativesSource" class="section-subtitle"></span>
+                    </div>
+                    <p id="alternativesSummary" class="alternatives-summary"></p>
+                    <div id="alternativesList" class="alternatives-list"></div>
+                    <div id="alternativesTips" class="alternatives-tips hidden">
+                        <h4>General Tips</h4>
+                        <ul id="alternativesTipsList"></ul>
                     </div>
                 </div>
 

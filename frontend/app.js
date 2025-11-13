@@ -1,6 +1,6 @@
 // API Configuration - automatically use deployed URL or localhost
 const API_BASE_URL = window.location.hostname === 'localhost'
-    ? 'http://localhost:8001'
+    ? 'http://localhost:8000'
     : window.location.origin;
 
 // Debug: Log API URL on load
@@ -719,15 +719,18 @@ async function scanProduct() {
 
 // Display result
 function displayResult(data) {
+    // Store product data for alternatives feature
+    currentProductData = data;
+
     document.getElementById('productName').textContent = data.product_name || 'Unknown Product';
     document.getElementById('productBrand').textContent = data.brand || 'Unknown';
     document.getElementById('productBarcode').textContent = data.barcode || (data.source === 'image_recognition' ? 'N/A (Food Image)' : '-');
-    
+
     const healthBadge = document.getElementById('healthBadge');
     const healthLabel = healthBadge.querySelector('.health-status-label');
     healthLabel.textContent = data.health_prediction;
     healthBadge.className = `health-status ${data.health_prediction.toLowerCase()}`;
-    
+
     document.getElementById('healthMessage').textContent = data.message || 'No health information available.';
     
     // Nutrition Score
@@ -921,4 +924,139 @@ function showError(message) {
 function hideAll() {
     errorMessage.classList.add('hidden');
     resultCard.classList.add('hidden');
+    // Hide alternatives section when scanning a new product
+    const alternativesResults = document.getElementById('alternativesResults');
+    if (alternativesResults) {
+        alternativesResults.classList.add('hidden');
+    }
+}
+
+// Store current product data for alternatives
+let currentProductData = null;
+
+// Get Healthier Alternatives functionality
+document.addEventListener('DOMContentLoaded', () => {
+    const getAlternativesBtn = document.getElementById('getAlternativesBtn');
+    if (getAlternativesBtn) {
+        getAlternativesBtn.addEventListener('click', getHealthierAlternatives);
+    }
+});
+
+async function getHealthierAlternatives() {
+    if (!currentProductData) {
+        showError('No product data available. Please scan a product first.');
+        return;
+    }
+
+    const alternativesBtn = document.getElementById('getAlternativesBtn');
+    const alternativesResults = document.getElementById('alternativesResults');
+
+    // Show loading state
+    alternativesBtn.disabled = true;
+    alternativesBtn.innerHTML = `
+        <svg class="spinner-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+        </svg>
+        Loading...
+    `;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/recommend-alternatives`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(currentProductData)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Failed to get alternatives');
+        }
+
+        const data = await response.json();
+        displayAlternatives(data);
+
+        // Scroll to alternatives
+        alternativesResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    } catch (error) {
+        console.error('Alternatives error:', error);
+        showError(`Failed to get alternatives: ${error.message}`);
+    } finally {
+        // Restore button
+        alternativesBtn.disabled = false;
+        alternativesBtn.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            Get Healthier Alternatives
+        `;
+    }
+}
+
+function displayAlternatives(data) {
+    const alternativesResults = document.getElementById('alternativesResults');
+    const alternativesSource = document.getElementById('alternativesSource');
+    const alternativesSummary = document.getElementById('alternativesSummary');
+    const alternativesList = document.getElementById('alternativesList');
+    const alternativesTips = document.getElementById('alternativesTips');
+    const alternativesTipsList = document.getElementById('alternativesTipsList');
+
+    // Show source
+    const sourceText = data.source === 'ai_powered' ? 'AI-Powered Recommendations' : 'Smart Recommendations';
+    alternativesSource.textContent = sourceText;
+
+    // Show summary
+    alternativesSummary.textContent = data.summary || 'Here are some healthier alternatives for you:';
+
+    // Display alternatives
+    if (data.alternatives && data.alternatives.length > 0) {
+        alternativesList.innerHTML = data.alternatives.map((alt, index) => `
+            <div class="alternative-card">
+                <div class="alternative-header">
+                    <div class="alternative-number">${index + 1}</div>
+                    <div class="alternative-title">
+                        <h4>${alt.name}</h4>
+                        <span class="alternative-brand">${alt.brand}</span>
+                    </div>
+                </div>
+                <p class="alternative-reason">${alt.why_better}</p>
+                <div class="alternative-benefits">
+                    ${alt.key_benefits.map(benefit => `
+                        <span class="benefit-tag">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            ${benefit}
+                        </span>
+                    `).join('')}
+                </div>
+                ${alt.estimated_improvements ? `
+                    <div class="alternative-improvements">
+                        ${Object.entries(alt.estimated_improvements).map(([key, value]) => `
+                            <div class="improvement-item">
+                                <span class="improvement-label">${key}:</span>
+                                <span class="improvement-value">${value}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `).join('');
+    }
+
+    // Display general tips
+    if (data.general_tips && data.general_tips.length > 0) {
+        alternativesTipsList.innerHTML = data.general_tips
+            .map(tip => `<li>${tip}</li>`)
+            .join('');
+        alternativesTips.classList.remove('hidden');
+    } else {
+        alternativesTips.classList.add('hidden');
+    }
+
+    // Show results
+    alternativesResults.classList.remove('hidden');
 }
